@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#070A12" />
+<title>幻方 · LOSHU 填数推理</title>
+<meta name="description" content="幻方填数谜题：把 1~n² 各填一次，让每行、每列、两条对角线的和都等于 M。九宫洛书 M=15、四四 M=34、泛对角连折线对角线也要等于 M。每局唯一解、每局都能用逻辑推到底，提示只说推得出的那一步。" />
+<!-- Inline icon: without it the browser probes the Pages domain root for /favicon.ico and logs a 404. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070A12'/%3E%3Cg stroke='%233C4E6B' stroke-width='1.4'%3E%3Crect x='5' y='5' width='22' height='22' rx='3' fill='%230B1220'/%3E%3Cpath d='M12.33 5v22M19.66 5v22M5 12.33h22M5 19.66h22'/%3E%3C/g%3E%3Cg font-family='monospace' font-size='6.6' font-weight='700' text-anchor='middle'%3E%3Ctext x='8.7' y='10.6' fill='%239FB4CE'%3E4%3C/text%3E%3Ctext x='16' y='10.6' fill='%239FB4CE'%3E9%3C/text%3E%3Ctext x='23.3' y='10.6' fill='%23FFC85C'%3E2%3C/text%3E%3Ctext x='8.7' y='18' fill='%239FB4CE'%3E3%3C/text%3E%3Ctext x='16' y='18' fill='%23FFC85C'%3E5%3C/text%3E%3Ctext x='23.3' y='18' fill='%239FB4CE'%3E7%3C/text%3E%3Ctext x='8.7' y='25.3' fill='%239FB4CE'%3E8%3C/text%3E%3Ctext x='16' y='25.3' fill='%239FB4CE'%3E1%3C/text%3E%3Ctext x='23.3' y='25.3' fill='%23FFC85C'%3E6%3C/text%3E%3C/g%3E%3C/svg%3E" />
+<link rel="stylesheet" href="css/game.css" />
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>幻方</h1>
+      <p class="sub">Loshu · 填数推理</p>
+    </div>
+    <div class="top-actions">
+      <button id="btn-notes" class="ghost" type="button" aria-pressed="true">笔记 显</button>
+      <button id="btn-sound" class="ghost" type="button" aria-pressed="true">音效 开</button>
+      <button id="btn-motion" class="ghost" type="button" aria-pressed="false">动效 全</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="view-menu" class="view">
+      <div class="menu-hero">
+        <h2>把 1~n² 各填一次，让每条线都加到 M</h2>
+        <p>
+          盘上要填的不是格子，是一组线：每行、每列、两条对角线的和都必须等于 M = n(n²+1)/2。
+          九宫 M=15，四四 M=34，泛对角那一档连绕出去的折对角线也要等于 M。
+          题面给的数不许动，其余每格填一个数、每个数只用一次。
+          这里没有运气题：每一局都只有一种填法，也每一局都能靠逻辑推到底——出题时由仓库自带的求解器逐局验过。
+        </p>
+      </div>
+
+      <div class="menu-cols">
+        <div class="col">
+          <h3 class="col-title">选一档</h3>
+          <div id="tier-list" class="tiers"></div>
+          <div id="resume-card" class="resume" hidden>
+            <div class="resume-txt">
+              <strong id="resume-name">未完成的牌局</strong>
+              <span id="resume-meta"></span>
+            </div>
+            <button id="btn-resume" class="primary" type="button">继续</button>
+          </div>
+        </div>
+
+        <div class="col">
+          <h3 class="col-title">纪录（同档比：先看不求提示几次，再看步数，最后看时间）</h3>
+          <ul id="record-list" class="records"></ul>
+
+          <h3 class="col-title">你会用到的六条规则</h3>
+          <ol class="rules">
+            <li><b>行列补全</b>：一行只差一格，M 减掉已和就是它；一个数在全盘只剩一格放得下，那格就是它（幻方里一个数不必出现在每一行，所以这条只能全盘数，不能一行行数——见 DESIGN「踩过的坑」）。</li>
+            <li><b>候选排除</b>：穿过这格的每条线各挤掉一些数，挤到最后只剩一个。</li>
+            <li><b>区间剪枝</b>：这行还差 17、只剩 3 格，能凑出 17 的组合里没有 4，这格就不是 4。</li>
+            <li><b>对角线</b>：同样的算术用在两条对角线上；泛对角档还要用在八条环绕斜带上。</li>
+            <li><b>互补对称</b>：三阶的每一盘都中心互补（对格凑成 n²+1），所以看见一个数就看见它对面那个。穷举 8 盘全中，四阶不成立。</li>
+            <li><b>反证</b>：假设这里填某数，把规则推到底会出现凑不出的线，假设就反了。出货的盘一次都不需要它。</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-game" class="view" hidden>
+      <div class="stage">
+        <div class="stage-head">
+          <span id="stat-name" class="puzzle-name">—</span>
+          <span id="stat-tier" class="chip">—</span>
+          <span id="stat-m" class="chip mono">M=—</span>
+          <span id="stat-time" class="chip mono">00:00</span>
+        </div>
+        <div id="board-wrap">
+          <canvas id="board" data-mode="fill" role="img" aria-label="幻方棋盘：先点一格，再按下面的数字键盘填数"></canvas>
+          <div id="win-veil" hidden>
+            <div class="win-card">
+              <h3>每条线都等于 M 了</h3>
+              <p id="win-meta"></p>
+              <p id="win-record" class="win-record"></p>
+              <div class="win-actions">
+                <button id="btn-again" class="primary" type="button">再来一局</button>
+                <button id="btn-menu-2" class="ghost" type="button">回选档</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p id="identity-line" class="identity mono" aria-live="polite"></p>
+        <p id="box-line" class="conflict-line" aria-live="polite"></p>
+      </div>
+
+      <aside class="panel">
+        <div class="modes" role="group" aria-label="落子模式">
+          <button id="btn-mode-fill" class="mode" type="button" aria-pressed="true">填数</button>
+          <button id="btn-mode-note" class="mode" type="button" aria-pressed="false">笔记</button>
+        </div>
+        <div id="pad" class="pad" role="group" aria-label="数字键盘"></div>
+        <div class="acts">
+          <button id="btn-hint" class="primary" type="button">提示<span class="mono" id="hint-count">0</span></button>
+          <button id="btn-undo" class="ghost" type="button">撤销</button>
+          <button id="btn-erase" class="ghost" type="button">擦掉</button>
+          <button id="btn-new" class="ghost" type="button">换一局</button>
+          <button id="btn-menu" class="ghost" type="button">回选档</button>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><span>步数</span><b id="stat-moves" class="mono">0</b></div>
+          <div class="stat"><span>提示</span><b id="stat-hints" class="mono">0</b></div>
+          <div class="stat"><span>已填</span><b id="stat-filled" class="mono">0/0</b></div>
+          <div class="stat"><span>待填</span><b id="stat-remaining" class="mono">0</b></div>
+          <div class="stat"><span>合上的线</span><b id="stat-lines" class="mono">0/0</b></div>
+          <div class="stat"><span>矛盾</span><b id="stat-problems" class="mono">0</b></div>
+          <div class="stat"><span>线索</span><b id="stat-clues" class="mono">0</b></div>
+          <div class="stat"><span>难度实测</span><b id="stat-score" class="mono">—</b></div>
+        </div>
+
+        <div class="hint-box">
+          <h4 id="hint-rule">提示理由</h4>
+          <p id="hint-line">按 <b>提示</b> 会说出当前能推的一步，以及它依据哪条规则。</p>
+        </div>
+
+        <h3 class="col-title">线账本（每条线现在到哪儿了）</h3>
+        <ol id="line-ledger" class="ledger"></ol>
+
+        <div class="legend">
+          <span><i class="sw sw-given"></i>题面给的数</span>
+          <span><i class="sw sw-ink"></i>你填的数</span>
+          <span><i class="sw sw-done"></i>这条线已到 M</span>
+          <span><i class="sw sw-note"></i>笔记</span>
+          <span><i class="sw sw-bad"></i>线被填坏了</span>
+        </div>
+        <p class="keyhint"><b>点格子</b> 选中 · <b>1~9 / A~G</b> 或点键盘填数 · <b>⌫</b> 擦掉 · <b>N</b> 切笔记 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>←↑→↓</b> 移动</p>
+      </aside>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>每局唯一解 · 每局可用逻辑推到底 · 提示只给推得出的一步 — 由 <code>tools/verify.sh</code> 在真实浏览器里逐条断言。</span>
+    <button id="btn-reset" class="link" type="button">清空存档</button>
+  </footer>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
