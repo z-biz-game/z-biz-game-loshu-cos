@@ -27,10 +27,14 @@ npm start         # http://127.0.0.1:5223/          （npm run dev 同义，显�
 npm run electron  # 桌面壳（唯一的 devDependency 是 electron，只有这条路需要它）
 ```
 
-`npm run verify` 需要本机的 Google Chrome，路径写死在
-`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`（可用 `CHROME_BIN` 覆盖）。
+`npm run verify` 需要本机的 Chrome：先试 macOS 的两个固定路径（Chrome / Chromium.app），再退到
+`PATH` 上的 `google-chrome` / `chromium`，`CHROME_BIN` 可覆盖 —— 所以 Linux runner 上同样能跑。
 本仓占 **5223**（web）和 **9373**（CDP）两个端口；被别的进程占着时脚本会等并重试，
 不会换端口、不会 kill 别人、也不会为了变绿放宽任何一条断言。
+
+这 339 项浏览器断言在 CI 里跑**两遍**：一遍对着 `server.cjs`（仓库＝文档根），一遍把仓库软链进
+一个路径段、用静态服务器端起来 —— 后者才是 GitHub Pages 端这个站点的方式（`…/z-biz-game-loshu-cos/`）。
+只跑根形态看不出这一维：兄弟仓 ulam 就这么在已部署站点上少了 19 条根本没跑的断言（`DESIGN.md` 踩过的坑 7）。
 
 ## 玩法
 

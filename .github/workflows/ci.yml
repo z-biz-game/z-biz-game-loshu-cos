@@ -44,3 +44,49 @@ jobs:
 
       - name: Entry files exist
         run: test -f index.html && grep -q '<canvas' index.html && grep -q 'js/main.js' index.html
+
+  # The 339 browser assertions used to live only on the machine that wrote them, which is not a
+  # gate. `tools/verify.sh` needs nothing extra on a runner: it finds google-chrome, queues for its
+  # ports instead of stealing a neighbour's, proves the listening PID is its own, and kills its
+  # Chrome on exit. MIN_ASSERTIONS=128 means a run that checks nothing is red, so a silently dead
+  # harness cannot read green here either.
+  browser:
+    name: real browser gate (339 assertions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # npm test's engine half is the job above; SKIP_UNIT keeps this job to the page.
+      - name: Headless playtest
+        env:
+          SKIP_UNIT: 1
+          WD_TIMEOUT: 600
+        run: bash tools/verify.sh
+
+      # Same scenarios against the URL shape production actually uses: Pages serves this repo under
+      # a path prefix (…/z-biz-game-loshu-cos/), while server.cjs makes the repo the document ROOT —
+      # and a root-shaped server cannot tell a leading-slash specifier apart from a relative one.
+      # That blind spot cost the sibling repo ulam 19 assertions that never ran on the deployed
+      # site while its local gate stayed green, so the prefix pass is part of the gate now.
+      - name: Headless playtest under a path prefix (how Pages serves us)
+        env:
+          SKIP_UNIT: 1
+          WD_TIMEOUT: 600
+          WEB_PORT: 5224
+          CDP_PORT: 9374
+        run: |
+          root=$(mktemp -d)
+          ln -s "$GITHUB_WORKSPACE" "$root/z-biz-game-loshu-cos"
+          python3 -m http.server 5299 --bind 127.0.0.1 --directory "$root" &
+          SERVER=$!
+          trap 'kill $SERVER 2>/dev/null' EXIT
+          for i in $(seq 1 40); do
+            curl -fsS -m 2 http://127.0.0.1:5299/z-biz-game-loshu-cos/ >/dev/null 2>&1 && break
+            sleep 0.25
+          done
+          curl -fsS -m 3 http://127.0.0.1:5299/z-biz-game-loshu-cos/js/main.js >/dev/null
+          SKIP_UNIT=1 BASE_URL=http://127.0.0.1:5299/z-biz-game-loshu-cos/ bash tools/verify.sh
+

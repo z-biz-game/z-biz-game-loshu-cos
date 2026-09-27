@@ -14,6 +14,19 @@ npm run balance                # 三档各 40 局的难度实测（README 那张
 npm run verify                 # 真 headless Chrome：11 场景 + 窄屏重跑
 ```
 
+同一批浏览器断言还要在**前缀形态**下再跑一遍（GitHub Pages 就是这么端这个站点的），原因见
+「踩过的坑 7」；CI 的 `browser` job 两遍都跑：
+
+```bash
+root=$(mktemp -d); ln -s "$PWD" "$root/z-biz-game-loshu-cos"
+python3 -m http.server 5299 --bind 127.0.0.1 --directory "$root" &
+SKIP_UNIT=1 WEB_PORT=5224 CDP_PORT=9374 \
+  BASE_URL=http://localhost:5299/z-biz-game-loshu-cos/ bash tools/verify.sh
+```
+
+（本机这台机器的系统代理会接走发往 `127.0.0.1` 的请求，所以这里写 `localhost`；CI 上没这代理，
+`ci.yml` 里用的就是 `127.0.0.1`。）
+
 四段的种子都是**写死的**：`balance.mjs` 用 `balance|${s}`（s = 0..39），裸分布用
 `raw|${tier.key}|${s}`，线索下界用 `floor|${s}`，浏览器场景用 `scen|<名字>`。
 所以除耗时那一列以外，任何一列在别的机器上重跑都必须一模一样 —— 复现不出来说明代码变了，
@@ -156,6 +169,19 @@ resume 不过 200 字节、不过 2 千字，都在同一场里各断一次。
 **不是**换个端口跑过去 —— 换端口测到的是别人的页面，绿了也是给别人背书。`verify.sh` 因此在
 起 Chrome 前后都查归属：唯一 `mktemp` 出来的 `--user-data-dir` 指纹必须出现在监听者的命令行
 里，出现不了就硬停，绝不 attach 上去。也不 kill 别人的进程，不放宽 `checks > 0`。
+
+### 7. 门禁的 URL 形态必须和生产一致（而且这条闸以前压根不在 CI 里）
+
+两件事一起修的。第一件：`ci.yml` 原先只有 `check`（语法 + 引擎断言 + 难度阶梯），那 339 项浏览器
+断言只在写它的那台机器上跑过 —— 那不叫门禁。现在有了 `browser` job，而且跑**两遍**：一遍对着
+`server.cjs`（仓库＝文档根），一遍把仓库软链进一个路径段、用 `python3 -m http.server` 端起来，
+`BASE_URL` 指过去 —— 也就是 GitHub Pages 端这个站点的方式（`…/z-biz-game-loshu-cos/`）。
+
+第二件才是为什么要跑两遍：斜杠开头的说明符是 **origin 根**。根形态的服务器分不清 `/js/x.js` 和
+`js/x.js`，于是页内注入脚本里写前者在本机正好解得着，发到 Pages 就 404，而一次失败的动态 import
+会把整段脚本拦腰抛断。兄弟仓 ulam 就这么在已部署站点上只剩 44 行、红 6 条，而本机同一份代码 63 行
+全绿 —— 少的 19 行**根本没跑**，红掉的还包括"纪录跨重载读回来"这种真主张。本仓的 `scenarios.js`
+里没有斜杠说明符（前缀形态实测 339 项 0 失败），但这道闸跑两遍是为了不让这个类别再溜进来。
 
 ## 目录地图
 
