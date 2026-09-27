@@ -55,9 +55,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # 22, not the 20 the check job above uses: tools/playtest.cjs is a raw CDP driver written
+      # against Node's global WebSocket/fetch, which only exist from 22 on. On 20 the very first
+      # attach dies with "WebSocket is not defined" and the job goes red before a single assertion
+      # runs. The engine job has no such need, so it keeps its pin.
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 22
 
       # npm test's engine half is the job above; SKIP_UNIT keeps this job to the page.
       - name: Headless playtest
