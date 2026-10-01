@@ -590,6 +590,20 @@ applyThemeVars();
 applySettings();
 renderMenu();
 
+// 可安装：只在 http(s) 下注册。Electron 与直接双击 index.html 走的都是 file://，那里
+// navigator.serviceWorker 存在但 register 必抛，不吞掉就是每次启动一条未捕获异常。
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator
+    && /^https?:$/.test(typeof location === 'object' && location ? location.protocol : '')) {
+  window.addEventListener('load', () => {
+    try {
+      navigator.serviceWorker.register(new URL('sw.js', document.baseURI || location.href).href)
+        .catch(() => {});
+    } catch {
+      /* 路径解析不了的宿主就不装，游戏照玩 */
+    }
+  });
+}
+
 window.loshu = {
   version: VERSION,
   view,
