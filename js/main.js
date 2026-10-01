@@ -484,7 +484,11 @@ function begin({ tier = 'jiugong', seed = null, resume = null } = {}) {
     game.moves = resume.moves || 0;
     game.hints = resume.hints || 0;
     baseElapsed = resume.elapsedMs || 0;
-    game.load(resume.fill, resume.notes);
+    // 存档里记的档位在换代后可能对不上盘（九宫 9 格 ↔ 四四 16 格）。长度不匹配就当新盘开：
+    // 宁可丢掉半截局面，也不把 16 个数字塞进 9 格的 board 里。
+    const fill = resume.fill && resume.fill.length === game.size ? resume.fill : null;
+    const notes = resume.notes && resume.notes.length === game.size ? resume.notes : null;
+    if (fill) game.load(fill, notes);
   }
   snapshotDone();
   // 新的一局从干净的动效状态开始：时钟归零、粒子与涟漪清空，上一局停在暂停态也不能开局就冻着。
