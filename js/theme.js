@@ -110,7 +110,15 @@ export function setReduceMotion(v) {
   motionReduced = !!v;
 }
 
-export const systemPrefersReducedMotion = () =>
-  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+// 每步都要读这个判断（动效层的 reduced/alive/draw 各一次），而 matchMedia 每次调用都会新建一个
+// MediaQueryList：查询对象留一份复用，matches 仍然是实时的。
+let sysQuery = null;
+
+export function systemPrefersReducedMotion() {
+  if (!sysQuery && typeof matchMedia === 'function') {
+    sysQuery = matchMedia('(prefers-reduced-motion: reduce)');
+  }
+  return !!sysQuery && sysQuery.matches;
+}
 
 export const prefersReducedMotion = () => motionReduced || systemPrefersReducedMotion();
