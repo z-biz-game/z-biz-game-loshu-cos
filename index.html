@@ -30,6 +30,9 @@
       <p class="sub">Loshu · 填数推理</p>
     </div>
     <div class="top-actions">
+      <button id="btn-help" class="ghost" type="button" title="玩法说明（? 或 Esc 关闭）">玩法</button>
+      <button id="btn-pause" class="ghost" type="button" aria-pressed="false" title="暂停 / 继续（P 或空格）">暂停</button>
+      <button id="btn-full" class="ghost" type="button" aria-pressed="false" title="全屏（F）">全屏</button>
       <button id="btn-notes" class="ghost" type="button" aria-pressed="true">笔记 显</button>
       <button id="btn-sound" class="ghost" type="button" aria-pressed="true">音效 开</button>
       <button id="btn-motion" class="ghost" type="button" aria-pressed="false">动效 全</button>
@@ -88,6 +91,19 @@
         </div>
         <div id="board-wrap">
           <canvas id="board" data-mode="fill" role="img" aria-label="幻方棋盘：先点一格，再按下面的数字键盘填数"></canvas>
+          <!-- 动效单独一张叠层：#board 的像素是验收对象（"没合上的线还是白纸"要求某格纸面
+               与 cellPaper 距离 ≤3），辉光落在格子里就会把那 339 条断言判红。 -->
+          <canvas id="fx-layer" aria-hidden="true"></canvas>
+          <div id="pause-veil" hidden>
+            <div class="pause-card">
+              <h3>已暂停</h3>
+              <p>计时、粒子、提示的存续时间都停在原地——再按 <b>P</b> 或 <b>空格</b> 接着想。</p>
+              <div class="win-actions">
+                <button id="btn-unpause" class="primary" type="button">继续</button>
+                <button id="btn-pause-menu" class="ghost" type="button">回选档</button>
+              </div>
+            </div>
+          </div>
           <div id="win-veil" hidden>
             <div class="win-card">
               <h3>每条线都等于 M 了</h3>
@@ -144,7 +160,7 @@
           <span><i class="sw sw-note"></i>笔记</span>
           <span><i class="sw sw-bad"></i>线被填坏了</span>
         </div>
-        <p class="keyhint"><b>点格子</b> 选中 · <b>1~9 / A~G</b> 或点键盘填数 · <b>⌫</b> 擦掉 · <b>N</b> 切笔记 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>←↑→↓</b> 移动</p>
+        <p class="keyhint"><b>点格子</b> 选中 · <b>1~9 / A~G</b> 或点键盘填数 · <b>⌫</b> 擦掉 · <b>N</b> 切笔记 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>←↑→↓</b> 移动 · <b>P</b> 暂停 · <b>R</b> 换一局 · <b>M</b> 静音 · <b>F</b> 全屏 · <b>?</b> 玩法</p>
       </aside>
     </section>
   </main>
@@ -153,6 +169,42 @@
     <span>每局唯一解 · 每局可用逻辑推到底 · 提示只给推得出的一步 — 由 <code>tools/verify.sh</code> 在真实浏览器里逐条断言。</span>
     <button id="btn-reset" class="link" type="button">清空存档</button>
   </footer>
+
+  <!-- 玩法说明：首启与 ? 都走这里。类名刻意避开 .rules——菜单那六条规则的条目数被
+       tools/scenarios.js 逐条比对，这里再放一份 .rules li 会把那条断言读成 12 条。 -->
+  <div id="help-veil" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div class="help-card">
+      <h2 id="help-title">三步上手</h2>
+      <ol class="steps">
+        <li><b>点一格</b>：题面给的数不许动，光标会停在第一个空格上，方向键也能走。</li>
+        <li><b>填一个数</b>：按下面的数字键盘或键 1~9 / A~G。填错了盘上会划线、说理由，擦掉重来不扣任何分。</li>
+        <li><b>推不动就按提示</b>：提示只会说"当前用逻辑能推得出的那一步"和它依据哪条规则，不替你填数；用了几次提示会记进成绩。</li>
+      </ol>
+      <p class="help-goal">
+        目标：把 1~n² 每个数各填一次，使每行、每列、两条对角线的和都等于
+        <b>M = n(n²+1)/2</b>。九宫 M=15，四四 M=34，泛对角那一档连绕出去的折对角线也要等于 M。
+        盘右边、盘下边那些数字块就是每条线当前的和，读它们比数格子快。
+      </p>
+      <dl class="keys">
+        <dt>Enter / 空格</dt><dd>选档页开一局；局中暂停 / 继续</dd>
+        <dt>点格子 · ←↑→↓</dt><dd>选中一格</dd>
+        <dt>1~9 · A~G</dt><dd>填数（四阶要按到 G）</dd>
+        <dt>⌫ / Delete</dt><dd>擦掉这一格</dd>
+        <dt>N</dt><dd>切笔记模式（笔记不约束盘面）</dd>
+        <dt>H</dt><dd>提示</dd>
+        <dt>Z</dt><dd>撤销</dd>
+        <dt>P / 空格</dt><dd>暂停 · 继续</dd>
+        <dt>R</dt><dd>换一局（同档）</dd>
+        <dt>M</dt><dd>静音 / 恢复</dd>
+        <dt>F</dt><dd>全屏</dd>
+        <dt>? · Esc</dt><dd>开 / 关这一页</dd>
+      </dl>
+      <div class="win-actions">
+        <button id="btn-help-close" class="primary" type="button">开始填数</button>
+        <button id="btn-help-play" class="ghost" type="button">开一局九宫</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script type="module" src="js/main.js"></script>

@@ -6,7 +6,7 @@
 const KEY = 'loshu.save.v1';
 
 const defaults = () => ({
-  settings: { sound: true, reduceMotion: false, showNotes: true, mode: 'fill' },
+  settings: { sound: true, reduceMotion: false, showNotes: true, mode: 'fill', seenHelp: false },
   best: {},
   resume: null,
   totals: { solved: 0, hints: 0, ms: 0 },

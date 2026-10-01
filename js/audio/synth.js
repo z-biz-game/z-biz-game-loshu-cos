@@ -6,6 +6,9 @@
 let ctx = null;
 let master = null;
 let enabled = true;
+let halted = false;
+
+const silent = () => !enabled || halted;
 
 function audio() {
   if (typeof AudioContext === 'undefined' && typeof webkitAudioContext === 'undefined') return null;
@@ -24,15 +27,30 @@ function audio() {
   return ctx;
 }
 
+// 静音与暂停都要真的把设备上下文停掉：只把 gain 设 0 是假静音，硬件仍在跑，
+// 而且下一次 tone() 还会照样新建振荡器节点。
+function applyAudioState() {
+  if (!ctx) return;
+  try {
+    if (silent()) ctx.suspend().catch(() => {});
+    else ctx.resume().catch(() => {});
+  } catch {
+    /* 老 WebKit 上 suspend 可能是同步的或压根没有 */
+  }
+}
+
 // One oscillator with a two-point pitch glide and an exponential decay. Everything below is a
 // call to this; adding a second voice shape is how a game ends up with sounds that do not belong
 // to the same instrument.
 function tone({ f0, f1 = f0, dur = 0.12, type = 'sine', gain = 0.22, delay = 0 }) {
+  // 静音态连上下文都不拉起：判据是"没新建振荡器"，不是"听起来没声"。
+  if (silent()) return;
   const ac = audio();
-  if (!ac || !enabled) return;
+  if (!ac) return;
   const t = ac.currentTime + delay;
   const osc = ac.createOscillator();
   const vol = ac.createGain();
+  Sound.nodesCreated++;
   osc.type = type;
   osc.frequency.setValueAtTime(f0, t);
   osc.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur);
@@ -45,10 +63,32 @@ function tone({ f0, f1 = f0, dur = 0.12, type = 'sine', gain = 0.22, delay = 0 }
 }
 
 export const Sound = {
+  // 实测口径：静音/暂停期间这个数必须一动不动。只把 gain 设 0 的实现会照样往上加。
+  nodesCreated: 0,
+
   setEnabled(v) {
     enabled = !!v;
+    applyAudioState();
   },
   enabled: () => enabled,
+
+  // 暂停是另一个独立的静音理由：玩家把音效开着暂停，上下文也该停。
+  halt() {
+    halted = true;
+    applyAudioState();
+  },
+  unhalt() {
+    halted = false;
+    applyAudioState();
+  },
+  halted: () => halted,
+
+  probe: () => ({
+    enabled,
+    halted,
+    nodesCreated: Sound.nodesCreated,
+    ctxState: ctx ? ctx.state : 'none',
+  }),
 
   // A digit going down: short, dry, one voice — the board is paper, not a slot machine.
   place() {

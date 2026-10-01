@@ -1,7 +1,7 @@
 // 离线外壳。同源子资源一律**网络优先、失败退缓存**：手工 VERSION 号配 cache-first 会把
 // js/css 永久钉死在旧版，出新 HTML 配旧 JS 的鬼状态（本组踩过）。版本号只用来在 activate
 // 时清掉上一代的缓存，不用来决定读不读网络。
-const VERSION = 'loshu-v1.0.0';
+const VERSION = 'loshu-v1.1.0';
 
 // 只预取外壳；图标与纹理交给网络优先那条路，省得首屏排队抓 14 张 PNG。
 const SHELL = [
@@ -13,6 +13,7 @@ const SHELL = [
   './js/store.js',
   './js/ui/game.js',
   './js/render/board.js',
+  './js/render/fx.js',
   './js/audio/synth.js',
   './js/engine/rng.js',
   './js/engine/loshu.js',

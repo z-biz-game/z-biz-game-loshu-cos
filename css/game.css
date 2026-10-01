@@ -10,7 +10,11 @@
 html, body {
   margin: 0;
   min-height: 100%;
-  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 62%, var(--surface) 100%);
+  /* 纸纹是 assets/gen/gen_art.py 产的 256px 无缝瓦片（格点噪声按频率绕回，所以能平铺），
+     叠在渐变之上：深靛蓝要读成纸，不能读成一块塑料。 */
+  background-image: url('../assets/img/paper-grain.png'), linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 62%, var(--surface) 100%);
+  background-repeat: repeat, no-repeat;
+  background-size: 256px 256px, auto;
   background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-sans);
@@ -22,7 +26,11 @@ body { touch-action: manipulation; }
 #app {
   max-width: 1180px;
   margin: 0 auto;
-  padding: var(--space-page) var(--space-page) var(--space-inner);
+  /* env() 要生效，viewport 里必须有 viewport-fit=cover —— index.html 第 5 行带着它。 */
+  padding: calc(var(--space-page) + env(safe-area-inset-top))
+           calc(var(--space-page) + env(safe-area-inset-right))
+           calc(var(--space-inner) + env(safe-area-inset-bottom))
+           calc(var(--space-page) + env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   gap: var(--space-card);
@@ -54,7 +62,7 @@ body { touch-action: manipulation; }
   text-transform: uppercase;
 }
 
-.top-actions { display: flex; gap: var(--space-gutter); }
+.top-actions { display: flex; flex-wrap: wrap; gap: var(--space-gutter); }
 
 button {
   font: inherit;
@@ -64,6 +72,10 @@ button {
   border: 1px solid var(--line);
   background: var(--surface);
   padding: 10px 16px;
+  /* 44px 是手指的下限，不是审美选择：iPhone 的人机规范与 Material 都取这个数。
+     数字键盘、档位牌、动作区全都吃这一条，窄屏上也不会缩成点不中的小方块。 */
+  min-height: 44px;
+  min-width: 44px;
   transition: background var(--dur-tap) var(--ease-ease), border-color var(--dur-tap) var(--ease-ease), transform var(--dur-tap) var(--ease-spring);
 }
 
@@ -426,4 +438,129 @@ main { flex: 1; }
   #view-game { grid-template-columns: 1fr; }
   .menu-cols { grid-template-columns: 1fr; }
   .foot { flex-direction: column; align-items: flex-start; }
+}
+
+/* ---------- 动效叠层与暂停 ---------- */
+
+/* 叠在 #board 之上、不吃指针：像素断言读的是 #board 的 ctx，辉光一律画在这张上。 */
+#fx-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: var(--radius-card);
+  pointer-events: none;
+}
+
+#pause-veil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(7, 10, 18, 0.72);
+  border-radius: var(--radius-card);
+  animation: rise var(--dur-base) var(--ease-ease) both;
+}
+
+.pause-card {
+  text-align: center;
+  padding: var(--space-card);
+  border: 1px solid var(--info);
+  border-radius: var(--radius-card);
+  background: var(--surface-lift);
+  max-width: 82%;
+}
+
+.pause-card h3 { margin: 0 0 6px; font-size: 18px; }
+.pause-card p { margin: 0 0 10px; font-size: 12.5px; color: var(--ink-dim); line-height: 1.6; }
+
+/* 暂停期间这张叠层连画都不画：累加器不推进，屏幕上的东西必须真的停在原地。 */
+body.is-paused #fx-layer { display: none; }
+
+/* ---------- 玩法说明浮层 ---------- */
+
+#help-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--space-card) + env(safe-area-inset-top))
+           calc(var(--space-card) + env(safe-area-inset-right))
+           calc(var(--space-card) + env(safe-area-inset-bottom))
+           calc(var(--space-card) + env(safe-area-inset-left));
+  background: rgba(4, 7, 13, 0.84);
+  animation: rise var(--dur-base) var(--ease-ease) both;
+}
+
+.help-card {
+  max-width: 620px;
+  max-height: 84vh;
+  overflow: auto;
+  padding: var(--space-card) var(--space-card) var(--space-inner);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.help-card h2 { margin: 0 0 10px; font-size: 18px; }
+
+.steps {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--ink-dim);
+}
+
+.steps b { color: var(--accent); }
+
+.help-goal {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-dim);
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.help-goal b { color: var(--ink); font-family: var(--font-mono); }
+
+.keys {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) 1fr;
+  gap: 4px 14px;
+  margin: 0 0 14px;
+  font-size: 12px;
+}
+
+.keys dt {
+  font-family: var(--font-mono);
+  color: var(--ink);
+  border: 1px solid var(--line-heavy);
+  border-radius: var(--radius-chip);
+  padding: 2px 7px;
+  justify-self: start;
+}
+
+.keys dd { margin: 0; color: var(--ink-dim); align-self: center; }
+
+/* ---------- 系统要求减少动效 ---------- */
+
+/* 这条不是装饰：js/render/fx.js 靠 matchMedia 关掉粒子与环绕光，这里关掉的是 CSS 侧的
+   入场与按压位移。两边都写，才不会出现"JS 省了动效、按钮还在弹"。 */
+@media (prefers-reduced-motion: reduce) {
+  .view,
+  #win-veil,
+  #pause-veil,
+  #help-veil,
+  button {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  button:active { transform: none; }
+  #fx-layer { display: none; }
 }
