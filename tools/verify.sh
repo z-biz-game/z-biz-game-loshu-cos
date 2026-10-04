@@ -93,6 +93,15 @@ else
   [ "$N" -ge "$MIN_ASSERTIONS" ] || { echo "断言只有 $N 条，少于 $MIN_ASSERTIONS —— 清点不能靠嘴说" >&2; exit 5; }
   { [ "$UNIT_RC" = 0 ] && [ "$F" = 0 ]; } || { echo "npm test 没过（rc=${UNIT_RC}，失败 $F 条），先看 $RUN/unit.log" >&2; exit 5; }
   echo "单元：$N 条断言全过"
+  # 部署集闸：ci.yml 跑这两步、本地整闸以前一次都不跑（59 仓同形）。「本地全绿、线上 404 自己的
+  # manifest / sw.js / 图标」这一类坏法缺的就是这一步。这一档的失败约定是 exit 5——FAILED 要到
+  # 场景汇报那一段才归零，插在那之前等于把红抹掉——所以按本仓的写法当场退。
+  echo "单元：部署集闸（页面要取的东西必须在产物里）"
+  node tools/deploy-set.mjs >"$RUN/deploy-set.log" 2>&1; DS_RC=$?
+  tail -4 "$RUN/deploy-set.log"
+  [ "$DS_RC" = 0 ] || { echo "部署集闸没过（rc=${DS_RC}），先看 $RUN/deploy-set.log" >&2; exit 5; }
+  node tools/deploy-set-selftest.mjs >"$RUN/deploy-set-selftest.log" 2>&1; DSS_RC=$?
+  [ "$DSS_RC" = 0 ] || { echo "部署集闸的阴性自证没咬住（rc=${DSS_RC}），先看 $RUN/deploy-set-selftest.log" >&2; exit 5; }
 fi
 
 # ---------- 起服务 ----------
