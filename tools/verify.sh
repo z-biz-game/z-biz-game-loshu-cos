@@ -96,8 +96,9 @@ else
   # 部署集闸：ci.yml 跑这两步、本地整闸以前一次都不跑（59 仓同形）。「本地全绿、线上 404 自己的
   # manifest / sw.js / 图标」这一类坏法缺的就是这一步。这一档的失败约定是 exit 5——FAILED 要到
   # 场景汇报那一段才归零，插在那之前等于把红抹掉——所以按本仓的写法当场退。
-  echo "单元：部署集闸（页面要取的东西必须在产物里）"
+  echo "=== deploy-set ===（单元：页面要取的东西必须在产物里）"
   node tools/deploy-set.mjs >"$RUN/deploy-set.log" 2>&1; DS_RC=$?
+  grep -E '^  FAIL' "$RUN/deploy-set.log" | head -8
   tail -4 "$RUN/deploy-set.log"
   [ "$DS_RC" = 0 ] || { echo "部署集闸没过（rc=${DS_RC}），先看 $RUN/deploy-set.log" >&2; exit 5; }
   node tools/deploy-set-selftest.mjs >"$RUN/deploy-set-selftest.log" 2>&1; DSS_RC=$?
