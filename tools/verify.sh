@@ -105,6 +105,16 @@ else
   [ "$DSS_RC" = 0 ] || { echo "部署集闸的阴性自证没咬住（rc=${DSS_RC}），先看 $RUN/deploy-set-selftest.log" >&2; exit 5; }
 fi
 
+# ---------- 文档行号对账 ----------
+# 这一档故意站在 SKIP_UNIT 管辖之外：它只读文件、不起浏览器，成本是一次 node 启动。CI 的 browser
+# job 两条 pass 都带 SKIP_UNIT=1，把它塞进上面那个单元块等于在 CI 里一次都不跑（而 README 会说
+# 「CI 跑到」——那句话就得有出处）。退 6 而不是复用 5，是为了让 rc 自己说出红的是哪一档。
+echo "=== docs ===（印在纸上的每个行号都读回真文件的那一行）"
+node tools/docs-test.mjs >"$RUN/docs.log" 2>&1; DOCS_RC=$?
+grep -E '^  FAIL' "$RUN/docs.log" | head -8
+tail -3 "$RUN/docs.log"
+[ "$DOCS_RC" = 0 ] || { echo "文档行号对账没过（rc=${DOCS_RC}），先看 $RUN/docs.log" >&2; exit 6; }
+
 # ---------- 起服务 ----------
 SPID=0
 LOCAL=0
