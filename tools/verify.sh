@@ -50,10 +50,10 @@ wait_free() {
   local port=$1 label=$2 i max=${PORT_WAIT_TRIES:-20}
   for i in $(seq 1 "$max"); do
     lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 || return 0
-    echo "  :$port（$label）还被 [$(why_busy "$port")]占着，等它释放 $i/$max …" >&2
+    echo "  :${port}（${label}）还被 [$(why_busy "$port")]占着，等它释放 $i/$max …" >&2
     sleep 3
   done
-  echo "端口 :$port（$label）始终被别的进程占着：" >&2
+  echo "端口 :${port}（${label}）始终被别的进程占着：" >&2
   lsof -nP -iTCP:"$port" -sTCP:LISTEN >&2 || true
   echo "那是别人仓的进程。附上去就是在测他们的页面，所以这里不抢、不换、不 kill —— 请等它空出来再跑。" >&2
   return 1
@@ -65,7 +65,7 @@ wait_free "$WEB_PORT" "web" || exit 6
 # 抢 CPU/端口，先让一让；但不因为「机器上有别的浏览器」就罢工 —— 真正要防的不是邻居存在，
 # 而是我附上去的那个端点不是我自己起的进程，那件事在下面用 --user-data-dir 唯一指纹来证明。
 for i in $(seq 1 ${ORPHAN_TRIES:-3}); do
-  ORPH=$(pgrep -f 'remote-debugging-port' 2>/dev/null | wc -l | tr -d ' ')
+  ORPH=$(ps -Ao command= | awk '/remote-debugging[-]port/ && !/--type=/' | wc -l | tr -d ' ')  # instances, not procs
   [ "${ORPH:-0}" = "0" ] && break
   echo "  机器上还有 $ORPH 个带 remote-debugging-port 的 Chrome（不是本仓端口），让路 $i/${ORPHAN_TRIES:-3}" >&2
   sleep 4
@@ -91,9 +91,29 @@ else
   N=$(grep -o '[0-9]\+ 通过' "$RUN/unit.log" | head -1 | grep -o '[0-9]\+' || echo 0)
   F=$(grep -o '[0-9]\+ 失败' "$RUN/unit.log" | head -1 | grep -o '[0-9]\+' || echo 9)
   [ "$N" -ge "$MIN_ASSERTIONS" ] || { echo "断言只有 $N 条，少于 $MIN_ASSERTIONS —— 清点不能靠嘴说" >&2; exit 5; }
-  { [ "$UNIT_RC" = 0 ] && [ "$F" = 0 ]; } || { echo "npm test 没过（rc=$UNIT_RC，失败 $F 条），先看 $RUN/unit.log" >&2; exit 5; }
+  { [ "$UNIT_RC" = 0 ] && [ "$F" = 0 ]; } || { echo "npm test 没过（rc=${UNIT_RC}，失败 $F 条），先看 $RUN/unit.log" >&2; exit 5; }
   echo "单元：$N 条断言全过"
+  # 部署集闸：ci.yml 跑这两步、本地整闸以前一次都不跑（59 仓同形）。「本地全绿、线上 404 自己的
+  # manifest / sw.js / 图标」这一类坏法缺的就是这一步。这一档的失败约定是 exit 5——FAILED 要到
+  # 场景汇报那一段才归零，插在那之前等于把红抹掉——所以按本仓的写法当场退。
+  echo "=== deploy-set ===（单元：页面要取的东西必须在产物里）"
+  node tools/deploy-set.mjs >"$RUN/deploy-set.log" 2>&1; DS_RC=$?
+  grep -E '^  FAIL' "$RUN/deploy-set.log" | head -8
+  tail -4 "$RUN/deploy-set.log"
+  [ "$DS_RC" = 0 ] || { echo "部署集闸没过（rc=${DS_RC}），先看 $RUN/deploy-set.log" >&2; exit 5; }
+  node tools/deploy-set-selftest.mjs >"$RUN/deploy-set-selftest.log" 2>&1; DSS_RC=$?
+  [ "$DSS_RC" = 0 ] || { echo "部署集闸的阴性自证没咬住（rc=${DSS_RC}），先看 $RUN/deploy-set-selftest.log" >&2; exit 5; }
 fi
+
+# ---------- 文档行号对账 ----------
+# 这一档故意站在 SKIP_UNIT 管辖之外：它只读文件、不起浏览器，成本是一次 node 启动。CI 的 browser
+# job 两条 pass 都带 SKIP_UNIT=1，把它塞进上面那个单元块等于在 CI 里一次都不跑（而 README 会说
+# 「CI 跑到」——那句话就得有出处）。退 6 而不是复用 5，是为了让 rc 自己说出红的是哪一档。
+echo "=== docs ===（印在纸上的每个行号都读回真文件的那一行）"
+node tools/docs-test.mjs >"$RUN/docs.log" 2>&1; DOCS_RC=$?
+grep -E '^  FAIL' "$RUN/docs.log" | head -8
+tail -3 "$RUN/docs.log"
+[ "$DOCS_RC" = 0 ] || { echo "文档行号对账没过（rc=${DOCS_RC}），先看 $RUN/docs.log" >&2; exit 6; }
 
 # ---------- 起服务 ----------
 SPID=0
@@ -109,7 +129,7 @@ if [ "$LOCAL" = 1 ]; then
   # 这个 :5223 是我刚起的那个 node 吗？端口号不足以证明归属，PID 才证明。
   LISTEN=$(lsof -nP -iTCP:"$WEB_PORT" -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ')
   [ "$LISTEN" = "$SPID " ] || {
-    echo ":$WEB_PORT 的监听者不是本脚本起的 node（我起的 PID=$SPID，实际监听 PID=${LISTEN:-无}）—— 不测别人的 server" >&2; exit 7; }
+    echo ":$WEB_PORT 的监听者不是本脚本起的 node（我起的 PID=${SPID}，实际监听 PID=${LISTEN:-无}）—— 不测别人的 server" >&2; exit 7; }
 fi
 # 起手预检：先把「服务到的字节确实是幻方」钉死，否则后面所有像素都是别人的
 SERVED=$(curl -fsS -m 5 "$BASE" 2>/dev/null || true)
@@ -152,7 +172,7 @@ V=$(curl -fsS -m 2 "http://127.0.0.1:$CDP_PORT/json/version")
 # 唯一的 --user-data-dir 是本脚本刚 mktemp 出来的路径：:9373 上的进程命令行里没有它，就说明
 # 我附到的是别人的 Chrome —— 这时候的每一条绿断言都在给别人仓的页面背书。
 owns_port "$CDP_PORT" "user-data-dir=$UDD" || {
-  echo ":$CDP_PORT 上的 Chrome 不是本脚本起的（我的 profile 是 $UDD，监听者命令行里没有它）" >&2
+  echo ":$CDP_PORT 上的 Chrome 不是本脚本起的（我的 profile 是 ${UDD}，监听者命令行里没有它）" >&2
   lsof -nP -iTCP:"$CDP_PORT" -sTCP:LISTEN >&2 || true
   exit 7; }
 echo "浏览器：$(echo "$V" | sed -n 's/.*"Browser": "\(.*\)".*/\1/p')"

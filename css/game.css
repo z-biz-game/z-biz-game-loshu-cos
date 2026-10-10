@@ -440,127 +440,68 @@ main { flex: 1; }
   .foot { flex-direction: column; align-items: flex-start; }
 }
 
-/* ---------- 动效叠层与暂停 ---------- */
+/* 中央分发：safe-area 兜底 */
 
-/* 叠在 #board 之上、不吃指针：像素断言读的是 #board 的 ctx，辉光一律画在这张上。 */
-#fx-layer {
-  position: absolute;
-  left: 0;
-  top: 0;
-  border-radius: var(--radius-card);
-  pointer-events: none;
+/* ---------- safe-area：刘海与主屏条不吃掉按钮（中央分发，akari-cos 同口径） ---------- */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+html, body {
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+body {
+  padding-top: var(--sat);
+  padding-bottom: var(--sab);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+/* 贴边的固定/吸底元素自己让开主屏条，别让 home indicator 压住按钮 */
+.fixed-bottom, .bottom-bar, .hud-bottom, footer.app-footer {
+  padding-bottom: calc(var(--sab) + env(safe-area-inset-bottom, 0px));
 }
 
-#pause-veil {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(7, 10, 18, 0.72);
-  border-radius: var(--radius-card);
-  animation: rise var(--dur-base) var(--ease-ease) both;
+
+/* ============================================================
+   44px 触摸命中下限（Apple HIG 手机可用性底线）
+   每个真正可点的元素都要有 ≥44×44 CSS px 的命中盒。
+   min-height / min-width 是**硬下限**：只会把过小的盒子撑到 44px，
+   本来就够大的控件（宽药丸、整行列表项、大数字键）外形一点不变。
+
+   两处非平凡之处：
+   1) 需要 !important —— 各组件自己有 `.shelf button { min-width: 34px }`
+      这类更"贴身"的规则，类选择器的优先级高于任何标签堆叠，
+      不加的话这条底线会被组件规则逐个抵消。
+   2) 先把 --touch-min 定死：tapa / nurikabe 早就写了
+      `min-height: var(--touch-min)`，但全仓没有任何地方定义过这个变量，
+      无 fallback 的 var() 在计算值阶段整条作废 —— 那是个看着像 44px、
+      实际什么都不保证的死规则。这里补上定义，让它们原本的意图真正成立。
+   ============================================================ */
+:root { --touch-min: 44px; }
+button,
+select,
+input,
+textarea,
+a[href],
+[role="button"] {
+  min-height: 44px !important;
+  min-width: 44px !important;
 }
 
-.pause-card {
-  text-align: center;
-  padding: var(--space-card);
-  border: 1px solid var(--info);
-  border-radius: var(--radius-card);
-  background: var(--surface-lift);
-  max-width: 82%;
-}
-
-.pause-card h3 { margin: 0 0 6px; font-size: 18px; }
-.pause-card p { margin: 0 0 10px; font-size: 12.5px; color: var(--ink-dim); line-height: 1.6; }
-
-/* 暂停期间这张叠层连画都不画：累加器不推进，屏幕上的东西必须真的停在原地。 */
-body.is-paused #fx-layer { display: none; }
-
-/* ---------- 玩法说明浮层 ---------- */
-
-#help-veil {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: grid;
-  place-items: center;
-  padding: calc(var(--space-card) + env(safe-area-inset-top))
-           calc(var(--space-card) + env(safe-area-inset-right))
-           calc(var(--space-card) + env(safe-area-inset-bottom))
-           calc(var(--space-card) + env(safe-area-inset-left));
-  background: rgba(4, 7, 13, 0.84);
-  animation: rise var(--dur-base) var(--ease-ease) both;
-}
-
-.help-card {
-  max-width: 620px;
-  max-height: 84vh;
-  overflow: auto;
-  padding: var(--space-card) var(--space-card) var(--space-inner);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-card);
-  background: var(--surface);
-}
-
-.help-card h2 { margin: 0 0 10px; font-size: 18px; }
-
-.steps {
-  margin: 0 0 12px;
-  padding-left: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  font-size: 13px;
-  line-height: 1.65;
-  color: var(--ink-dim);
-}
-
-.steps b { color: var(--accent); }
-
-.help-goal {
-  margin: 0 0 12px;
-  font-size: 12.5px;
-  line-height: 1.7;
-  color: var(--ink-dim);
-  border-top: 1px solid var(--line);
-  padding-top: 10px;
-}
-
-.help-goal b { color: var(--ink); font-family: var(--font-mono); }
-
-.keys {
-  display: grid;
-  grid-template-columns: minmax(96px, auto) 1fr;
-  gap: 4px 14px;
-  margin: 0 0 14px;
-  font-size: 12px;
-}
-
-.keys dt {
-  font-family: var(--font-mono);
-  color: var(--ink);
-  border: 1px solid var(--line-heavy);
-  border-radius: var(--radius-chip);
-  padding: 2px 7px;
-  justify-self: start;
-}
-
-.keys dd { margin: 0; color: var(--ink-dim); align-self: center; }
-
-/* ---------- 系统要求减少动效 ---------- */
-
-/* 这条不是装饰：js/render/fx.js 靠 matchMedia 关掉粒子与环绕光，这里关掉的是 CSS 侧的
-   入场与按压位移。两边都写，才不会出现"JS 省了动效、按钮还在弹"。 */
-@media (prefers-reduced-motion: reduce) {
-  .view,
-  #win-veil,
-  #pause-veil,
-  #help-veil,
-  button {
-    animation: none !important;
-    transition: none !important;
-  }
-
-  button:active { transform: none; }
-  #fx-layer { display: none; }
+/* ════════════════════════════════════════════════════════════════
+   线上实测（https://z-biz-game.github.io/z-biz-game-loshu-cos/，CDP setDeviceMetricsOverride
+   dpr=3，读数在 _tmp-live-sweep-r19.log）：320×640 冷/热两腿都报 vw=378≠320——布局视口是被
+   页面自己撑宽的。.topbar 是 nowrap 的 space-between flex，左边 .brand 的 30px 标题、右边
+   .top-actions 那一行 290@88px 的按钮（每个都吃全局 min-height/min-width:44px 的触摸下限），
+   两栏在 320 上排不进一行，于是最右那枚 BTN#btn-motion 53@325 整枚掉到屏幕外。
+   触摸下限不能撤（撤了就退回"手指点不中"那次修复），所以改让这一行会折：.topbar 允许换行、
+   .brand 允许收缩、.top-actions 自己也能折。竖向多占一行不是缺陷，横向出屏才是。
+   ════════════════════════════════════════════════════════════════ */
+@media (max-width: 420px) {
+  .topbar { flex-wrap: wrap; row-gap: 8px; }
+  .brand { min-width: 0; }
+  .top-actions { flex-wrap: wrap; row-gap: 6px; }
 }
