@@ -6,6 +6,14 @@
 let ctx = null;
 let master = null;
 let enabled = true;
+// 静音或暂停都要真的停声：halted 是"暂停期间"那一档（暂停与静音是两件事，
+// 静音是玩家的选择，暂停是这一局的局面）。
+//
+// 这两行是并线时丢的，而下面 tone() 里的 silent()、halt()/unhalt() 里的 halted 全都还在
+// ⇒ 第一次发声就抛 ReferenceError: silent is not defined（而它是在落子的路径上抛的，
+// 玩家看到的是"点一下就红"）；暂停同理。
+let halted = false;
+const silent = () => !enabled || halted;
 // 静音偏好：读回存档。放在模块顶层，这样每次 init（首屏、开局、重开）都拿到同一个答案，
 // 重开一局不会把玩家的静音选择洗掉。
 try {
