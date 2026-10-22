@@ -133,7 +133,7 @@ $ bash tools/verify.sh
 部署集：30 条引用（含 3 张位图尺寸核对），失败 0 项
 rows: 49 fail: 0
 === docs ===（印在纸上的每个行号都读回真文件的那一行）
-文档行号对账：2 份文档 · 20 条引用 · 8 条带指认 · 1 条续引 · 0 条跨仓 · 15 条判据
+文档行号对账：3 份文档 · 23 条引用 · 13 条带指认 · 1 条续引 · 0 条跨仓 · 15 条判据
 rows: 15 fail: 0
 预检：http://127.0.0.1:5223/ 是本站（13274 字节）
 测试面：window.loshu 1.0.0 @ http://127.0.0.1:5223/
@@ -193,11 +193,11 @@ VERIFY_RC=0
 
 | 检查 | 基线（`a7d23e6`） | 本次 | 判定 |
 |---|---|---|---|
-| `node --check js/main.js` | `SyntaxError: Identifier 'toggleFullscreen' has already been declared`（另有 `paused` / `setPaused` 两处，解析器只报第一个） | 解析通过 | **并线造成**：整局不可玩 |
+| `node --check js/main.js` | `SyntaxError: Identifier 'toggleFullscreen' has already been declared`（另有 `paused` / `setPaused` 两处，解析器只报第一个） | 解析通过；`js/main.js:350` 的 `toggleFullscreen` 是唯一定义 | **并线造成**：整局不可玩 |
 | `npm test` | 520 通过 / 0 失败 | 520 通过 / 0 失败 | 未受影响（引擎层与 UI 层无关） |
-| `node tools/docs-test.mjs` | rows: 15 fail: 0 | rows: 15 fail: 0 | 未受影响 |
+| `node tools/docs-test.mjs` | rows: 15 fail: 0 | 并线后现跑 `rows: 15 fail: 3`（D2 报 `deliverable.md=0`，D10 的份数/引用两格还停在并线前）→ 补引用、重贴盖章后 `rows: 15 fail: 0` | **并线造成**，不是"未受影响"：这一行原先写的 0 是并线那一跑的读数，合并后的树上它红过 |
 | `node tools/deploy-set.mjs` | 30 条引用 / 49 行，**2 项失败**（两个计数钉还停在并线前的 26 / 45） | 30 条引用 / 49 行，0 失败 | **并线造成**（页面要取的东西凑到了 30 条） |
-| 浏览器十一段 | 跑不起来（整页不加载） | 339 条，0 失败 | 另有一处：`js/audio/synth.js` 的 `silent()` / `halted` 两个声明在更早的一次并线里就丢了（引入它们的是 `2bcd40b`），两侧都没有 ⇒ 每次发声都抛 ReferenceError |
+| 浏览器十一段 | 跑不起来（整页不加载） | 339 条，0 失败 | 另有一处：`js/audio/synth.js` 的 `silent()` / `halted` 两个声明在更早的一次并线里就丢了（引入它们的是 `2bcd40b`），两侧都没有 ⇒ 每次发声都抛 ReferenceError；补回的两个声明现在在 `js/audio/synth.js:15` 的 `halted` 与 `js/audio/synth.js:16` 的 `silent` |
 
 结论：全部红都是并线（仓内并过两次）把两侧拼在一起带进来的；`synth.js` 那两个声明是**上一次并线**丢的，本轮一并补回。
 
